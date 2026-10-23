@@ -1,0 +1,3 @@
+# Screenshots show the AWS account ID and public IPs; keep local only
+evidence/**/*.png
+*.backup
