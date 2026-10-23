@@ -1,0 +1,28 @@
+# Redacted: NAT Elastic IP replaced with <nat-eip>
+
+## DB (10.20.11.48), before the route
+PS> Test-NetConnection example.com -Port 443
+WARNING: TCP connect to (104.20.23.154 : 443) failed
+WARNING: TCP connect to (172.66.147.243 : 443) failed
+SourceAddress          : 10.20.11.48
+PingSucceeded          : False
+TcpTestSucceeded       : False
+
+## DB, after 0.0.0.0/0 -> NAT
+PS> Test-NetConnection example.com -Port 443
+RemoteAddress    : 172.66.147.243
+SourceAddress    : 10.20.11.48
+TcpTestSucceeded : True
+PS> Invoke-RestMethod https://checkip.amazonaws.com
+<nat-eip>
+
+## Laptop, inbound to the NAT address
+PS> Test-NetConnection <nat-eip> -Port 1521
+WARNING: TCP connect to (<nat-eip> : 1521) failed
+PingSucceeded          : False
+TcpTestSucceeded       : False
+
+## DB, after teardown (route, NAT, Elastic IP removed)
+PS> Test-NetConnection example.com -Port 443
+SourceAddress          : 10.20.11.48
+TcpTestSucceeded       : False

@@ -83,8 +83,26 @@ A silent timeout points at layers 2-5. An immediate refusal means the packet arr
 
 This confirms the three requirements for internet reachability on the app side (IGW route, public IP, open security group) and that the DB is reachable only from inside the VPC.
 
+## Step 2.7: Outbound-only internet for the private subnet (NAT Gateway, temporary)
+
+**Goal.** Show that a private subnet can reach the internet without being reachable from it.
+
+**Build.** An Elastic IP and a public NAT Gateway (`pmbrs-nat`) in `pmbrs-public-a`, then `0.0.0.0/0 → pmbrs-nat` added to `pmbrs-private-rt`. The NAT must sit in a public subnet because it needs the Internet Gateway itself.
+
+| Test (run on the DB, `10.20.11.48`) | Route state | Result |
+|---|---|---|
+| `Test-NetConnection example.com -Port 443` | Local route only | Name resolved, then timed out: `TcpTestSucceeded : False` |
+| Same command | `0.0.0.0/0 → NAT` | `TcpTestSucceeded : True` |
+| `Invoke-RestMethod https://checkip.amazonaws.com` | `0.0.0.0/0 → NAT` | Returned the NAT's Elastic IP, not the DB's private address |
+| `Test-NetConnection <NAT Elastic IP> -Port 1521` from the laptop | `0.0.0.0/0 → NAT` | Timed out: `TcpTestSucceeded : False` |
+| `Test-NetConnection example.com -Port 443` after teardown | Local route only | `TcpTestSucceeded : False` again |
+
+**Why it works.** The NAT rewrites the DB's private source address to its own public address and remembers the connection, so replies find their way back. A connection that starts on the internet has no entry in that table, so it is dropped. The DB also has no public IP, and `pmbrs-db-sg` has no internet source.
+
+**Teardown (same session).** Route deleted, NAT Gateway deleted, Elastic IP released, and the baseline failure reproduced. A NAT Gateway bills by the hour and an unattached Elastic IP bills too, so neither is left running. In production the private subnet would keep the NAT (one per AZ for resilience), or use VPC endpoints for AWS services (step 2.9).
+
 ## Planned additions
 
-- Step 2.7: temporary NAT Gateway and `0.0.0.0/0 → NAT` on the private table, tested, then deleted.
+- Step 2.7: done, see above.
 - Step 2.9: S3 Gateway VPC Endpoint (a route table entry, no hourly cost).
 - Step 2.10: Route 53 private hosted zone so the app connects to the DB by name.
